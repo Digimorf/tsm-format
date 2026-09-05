@@ -1,0 +1,11 @@
+# Build output
+obj/
+bin/
+*.o
+*.obj
+*.exe
+
+# Recordings and tapes: the format is here, the material is yours.
+*.wav
+*.tsm
+*.bit

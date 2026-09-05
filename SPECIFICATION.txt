@@ -1,0 +1,279 @@
+===============================================================================
+ TSM - CONTEXT FILE (format, toolchain, C sources, applications)
+===============================================================================
+
+ FOLDER NOTE: in the repository this folder is named "tms_format" (a historical
+ typo of "TSM"). All format material - specification, C sources, batch files and
+ binaries - lives here. The emulator side instead lives in
+ src/machine/tape.c / tape.h and src/loader.c.
+
+
+-------------------------------------------------------------------------------
+ 1. WHAT TSM IS
+-------------------------------------------------------------------------------
+
+ TSM = Temporal Signal Medium.
+
+ It is a generic, source-agnostic format for storing a two-state temporal signal
+ (HIGH/LOW) by describing its edge/toggle transitions over time, instead of the
+ audio samples. It is not tied to any machine, protocol or historical source: it
+ represents "when" the signal switches, with tick resolution (a configurable time
+ unit, default 4000 ns = 4 us).
+
+ Current version: TSM v5.2 "Compact Escape" (magic "TSM5", version 5).
+ Reference toolchain license: MIT (see LICENSE).
+
+ Conceptual model (3 region types):
+
+   ZERO_SILENCE   (4)  true zero-amplitude gap (real silence)
+   SILENCE/HOLD   (0)  the signal stays stable HIGH or LOW, no edge
+   INDEXED_DELTA  (3)  active edge/toggle stream
+
+ A TSM tape is therefore a sequence of regions: long silences/holds compressed
+ into a few bytes, and active blocks encoded as a compact stream of time deltas.
+
+
+-------------------------------------------------------------------------------
+ 2. FORMAT SPECIFICATION (v5.2)
+-------------------------------------------------------------------------------
+
+ References: TSM_v5_2_FORMAT_SPEC.md, README_TSM_V5_2_COMPACT_ESCAPE.md,
+ structs in src_v5/tsm_v5.h.
+
+ 2.1 HEADER - TSM5Header, 80 bytes
+ ---------------------------------
+   magic[4]               char   "TSM5"
+   version                u16    5
+   header_size            u16    80
+   total_duration_ticks   u64    total duration in ticks
+   base_time_unit_ns      u64    base time unit (ns/tick), default 4000
+   region_count           u32    number of regions
+   region_entry_size      u32    104
+   region_table_offset    u64    offset of the region table
+   data_offset            u64    offset of the payload data
+   flags, reserved32      u32    reserved
+   reserved0              u64    initial signal state: 0 = LOW, 1 = HIGH
+   reserved1              u64    original source sample count
+   reserved2              u64    original source sample rate
+
+ 2.2 REGION - TSM5Region, 104 bytes
+ ----------------------------------
+   Main fields: start_ticks, duration_ticks, region_mode (0/3/4), encoding,
+   time_unit_ns (per-region), table_count / table_entry_size (delta table),
+   data_offset / data_size (payload), aux_*, flags, reserved0 (state
+   before/through the region: 0 LOW / 1 HIGH).
+
+   Compact Escape key point: for INDEXED_DELTA regions,
+   region.flags = raw_delta_bytes (1, 2, 3 or 4) - the byte width of the raw
+   delta that follows an escape.
+
+ 2.3 COMPACT ESCAPE ENCODING (encoding = 7, NIBBLE_ESCAPE_INDEX)
+ --------------------------------------------------------------
+   The active payload is a nibble stream (4 bits):
+
+     nibble 0..14 = index into the region's delta table
+     nibble 15    = ESCAPE
+
+   After an escape: align to the next byte boundary, then read a raw
+   little-endian delta region.flags bytes wide. Each region has its own delta
+   table (max 15 entries, because nibble 15 is reserved for the escape ->
+   I4/I8/I16 profiles).
+
+   Rationale: common deltas (the fixed-duration bits of a loader) fit in 4 bits;
+   rare/long deltas use the escape. This recovers compactness while preserving
+   timing accuracy (the old v5.1 per-byte escape was accurate but often ~2x the
+   source).
+
+ 2.4 PLAYBACK PSEUDOCODE
+ -----------------------
+   for each region:
+       if ZERO_SILENCE:   output zero for region duration
+       else if SILENCE:   output current state for region duration
+       else if INDEXED_DELTA:
+           restore pre-edge state
+           toggle at region start
+           while region active:
+               code = read_nibble();
+               if (code < 15) delta = table[code];
+               else { align_to_byte(); delta = read_raw_delta(region.flags); }
+               wait(delta);
+               toggle();
+
+
+-------------------------------------------------------------------------------
+ 3. C SOURCES
+-------------------------------------------------------------------------------
+
+ 3.1 REFERENCE TOOLCHAIN - tms_format/src_v5/
+ --------------------------------------------
+   Build: build_v5_2_compact.bat (requires gcc in PATH, -std=c99 -O2 -Wall).
+   Output in bin/. 8 compilation steps.
+
+   Core modules (library):
+     tsm_v5.c / tsm_v5.h    Format I/O: read/write of header and regions,
+                            u16/u32/u64 LE helpers, samples <-> ticks
+                            conversions, u64 -> dec. Defines all the constants
+                            (TSM5_MODE_*, TSM5_ENCODING_*, TSM5Header,
+                            TSM5Region).
+     wav_io_simple.c / .h   Minimal WAV loader: WavData { sample_rate, channels,
+                            sample_count, double* samples },
+                            wav_load_pcm16_mono_simple().
+     indexed_common.c / .h  Shared structures/algorithms for segmentation and
+                            building the indexed delta tables.
+
+   CLI tools (executables):
+     wav_tsm_advisor_v5_indexed.c -> wav_tsm_advisor_v5_indexed.exe
+        Analyzes a WAV, reports common deltas and "zero-like" gaps, and generates
+        the conversion/render batch files using the source WAV sample rate.
+     wav2tsm_indexed_v5.c -> wav2tsm_indexed_v5.exe
+        WAV -> TSM v5.2 compact (nibble+escape). Default raw_delta_bytes = 4;
+        I4/I8/I16 profiles (table size).
+     tsm2wav_v5.c -> tsm2wav_v5.exe
+        TSM -> WAV: reference renderer. Handles HOLD/SILENCE, ZERO_SILENCE,
+        INDEXED_DELTA (+ legacy nibble-packed for inspection).
+     wav_gap_scan.c -> wav_gap_scan.exe
+        Detects ~zero-amplitude gaps in a WAV. Use: compare original vs
+        re-rendered WAV.
+     tsm_v5_indexed_audit.c -> tsm_v5_indexed_audit.exe
+        Structural diagnostics: dump of header, regions, delta table of a .tsm.
+
+ 3.2 EMULATOR-SIDE DECODER - src/machine/tape.c / tape.h
+ -------------------------------------------------------
+   The SE3K emulator has its own runtime TSM playback implementation
+   (independent of the CLI toolchain), because it must reproduce the FSK signal
+   to the virtual datacorder synchronized with the Z80 CPU cycles:
+
+     - tape_load_tsm(t, data, size): parses the binary into tape_t
+       (fmt = TAPE_FMT_TSM); builds a tsm_region_t array reduced to the runtime
+       fields.
+     - Decode engine: tsm_enter_region(), tsm_decode_delta(), tsm_read_nibble(),
+       tsm_get_level(), tsm_advance_and_render(), tsm_seek_to_ms().
+     - Time conversions tsm_cyc_to_ticks() / tsm_ticks_to_cyc()
+       (CPU cycles <-> ticks, based on the region's time_unit_ns).
+     - TSM tapes have NO bitstream buffer (t->data == NULL): the signal level is
+       decoded on-the-fly on every PPI/datacorder read.
+     - Constants in tape.h: TSM_MODE_SILENCE/INDEXED_DELTA/ZERO_SILENCE,
+       TSM_NIBBLE_ESCAPE = 15, TSM_MAX_TABLE_ENTRIES = 15.
+
+ 3.3 LOADER / DISTRIBUTION - src/loader.c
+ ----------------------------------------
+     - Steganographic PNG container: footer with magic "TSM5" -> tape_load_tsm();
+       the jCard is injected separately. Lets you distribute a tape as a normal
+       PNG image.
+     - Raw .tsm binary: load_tsm_tape() -> tape_load_tsm().
+
+
+-------------------------------------------------------------------------------
+ 4. UTILITIES AND WORKFLOW
+-------------------------------------------------------------------------------
+
+ 4.1 DRAG-AND-DROP BATCH FILES (tms_format/)
+ -------------------------------------------
+   analyze_wav_generate_v5_2_batches.bat
+      Drop a WAV -> advisor -> _v5_2_advisor.txt report + batch
+      TSM_v5_2_I16_<file>.bat.
+   castool_to_wav_dragdrop.bat
+      Wrapper for MAME castool: container/tape (e.g. .cas, fmsx) -> WAV.
+   tsm_v5_indexed_audit_dragdrop.bat
+      Drop a .tsm -> audit report.
+   wav_gap_scan_dragdrop.bat
+      Drop a WAV -> gap report (threshold 0.03, min 20 ms).
+   build_v5_2_compact.bat
+      Builds the whole toolchain.
+
+ 4.2 DEFAULT PARAMETERS (advisor)
+ --------------------------------
+   time_unit_ns    = 4000      edge_threshold  = 0.35
+   min_delta_ticks = 1         gain            = 8.0
+   clip_level      = 1.0       zero_threshold  = 0.03
+   min_zero_ms     = 20
+
+ 4.3 TYPICAL WORKFLOW
+ --------------------
+   1. If needed, convert the source (container/tape) to WAV (castool_to_wav).
+   2. Drop the WAV onto analyze_wav_generate_v5_2_batches.bat.
+   3. Run the generated TSM_v5_2_I16_<file>.bat first (I16 baseline).
+   4. Test the re-rendered WAV (tsm2wav) and compare gaps (wav_gap_scan).
+   5. Try I8 / I4 for more compactness.
+
+ 4.4 PYTHON GUI - Tape_Factory GUI/
+ ----------------------------------
+   SE3K Tape Factory tools (SE3K header, author F. De Simone):
+     - tape_factory_gui_integrated.py : main tape authoring GUI.
+     - tsm_analyzer_tk.py : structural validator and block analyzer: parses the
+       TSM binary, FSK-demodulates each INDEXED_DELTA region, detects SC-3000 KCS
+       block headers (0x16 sync + 0x24 delimiter) and shows a scrollable
+       checklist with per-block memos, insertable into the J-card text box.
+     - analyze_tsm_pngs.py, tape_waveform.py / tape_waveform_tk.py,
+       wav_inspector_tk.py, tape_inspector.py, tape_check.py : inspection and
+       waveform / TSM-in-PNG visualization.
+
+ 4.5 VALIDATION STATUS (VALIDATION_NOTES.md)
+ -------------------------------------------
+   ZX Spectrum: OK with reconstructed WAVs, I16 baseline.
+   MSX cassette: OK with reconstructed WAVs.
+
+
+-------------------------------------------------------------------------------
+ 5. POSSIBLE APPLICATIONS
+-------------------------------------------------------------------------------
+
+ 5.1 RETROCOMPUTING (primary application)
+ ----------------------------------------
+   TSM was born to faithfully preserve the cassette tapes of 8-bit home computers
+   and consoles. Its strength is that it stores the signal at the edge level, not
+   its logical interpretation:
+
+     - Encoding independence. Unlike "logical" formats (.cas, .tap, .tzx to some
+       extent), TSM does not need to "understand" the loader. It captures the
+       timing of the transitions, so it represents without trouble:
+         * standard KCS (SC-3000/SG-1000, MSX),
+         * the ZX Spectrum ROM loader,
+         * turbo loaders and custom loaders,
+         * multi-format / mixed tapes (e.g. an SC-3000 loader with ZX Spectrum
+           formatted data on the same tape - a real case handled by SE3K),
+         * timing-based protection schemes.
+     - Hardware-level playback. In SE3K the TSM is fed to the virtual datacorder,
+       which FSK-demodulates it exactly like the real machine would (see tape.c),
+       instead of "injecting" already-decoded bytes. This maximizes compatibility
+       with the original loaders.
+     - Compactness with fidelity. Hold/zero-silence compress the long pilot tones
+       and the silences; the nibble+escape stream keeps the data blocks small
+       while preserving tick-level accuracy (4 us by default).
+     - Friendly distribution. A TSM tape can be wrapped in a steganographic PNG
+       (footer "TSM5") complete with a J-card: it is distributed and loaded like
+       a regular image.
+
+   In short: TSM is the "high-level signal abstraction" equivalent of a WAV
+   sampling of the tape, but orders of magnitude smaller and suited to real-time
+   loading in emulation.
+
+ 5.2 OTHER APPLICATIONS (source-agnostic format)
+ -----------------------------------------------
+   Being a generic Temporal Signal Medium, TSM can archive/compress any sampled
+   two-state temporal signal:
+
+     - captured serial protocols and digital buses (UART/RTTY, telegraphy/CW,
+       line signals), for analysis or replay;
+     - 1-bit instrumentation / logic-analyzer traces with long stable periods;
+     - any pipeline where it is convenient to keep the transitions instead of the
+       samples, exploiting the hold/zero-silence segmentation for compression.
+
+   For these uses the same tools apply: wav2tsm to import from WAV, tsm2wav to
+   re-render, audit/gap_scan for diagnostics.
+
+
+-------------------------------------------------------------------------------
+ 6. QUICK REFERENCES
+-------------------------------------------------------------------------------
+
+   Format specification   tms_format/TSM_v5_2_FORMAT_SPEC.md
+   Toolchain README       tms_format/README_TSM_V5_2_COMPACT_ESCAPE.md
+   Validation notes        tms_format/VALIDATION_NOTES.md
+   C header/structs       tms_format/src_v5/tsm_v5.h
+   Build toolchain        tms_format/build_v5_2_compact.bat
+   Emulator decoder       src/machine/tape.c, src/machine/tape.h
+   PNG/TSM loader         src/loader.c
+   Authoring GUI          Tape_Factory GUI/
+
+===============================================================================
