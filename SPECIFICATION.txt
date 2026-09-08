@@ -110,6 +110,72 @@
                toggle();
 
 
+ 2.5 LABEL SECTION - optional, appended after the payloads
+ ---------------------------------------------------------
+   A TSM is a stream of edges and nothing else, which is the point: it does not
+   know what the tape carries. That leaves nowhere for what a person worked out
+   about the recording - what the programs are called, which system wrote each
+   region, where the tape came from, what has to be typed to load it - and that
+   knowledge was being lost with every file written.
+
+   The label section holds it. It is optional, it is appended AFTER the last
+   region payload, and it is found from the END of the file:
+
+     [ ... region payloads ... ][record][record] ... [u32 count][u32 bytes]["TSML"]
+
+   Nothing that comes before it moves. A reader that knows nothing of this
+   never looks at the end of the file and never notices it is there; a reader
+   that wants the labels seeks twelve bytes back from the end, checks the
+   magic, and walks the records from `end - 12 - bytes`.
+
+   There is deliberately NO flag in the header announcing the section. A bit
+   would save a twelve-byte seek and cost the guarantee worth having: a TSM
+   carrying labels is a TSM without them plus bytes at the end, not one byte
+   otherwise different. It would also be a second thing to keep true, and a
+   tool that rewrote the payloads and dropped the section would leave it lying,
+   where the footer can only lie about itself and is checked against its own
+   count and length.
+
+   Footer, the last 12 bytes of the file:
+
+     u32  count           how many records were written
+     u32  bytes           the records' total size, not counting this footer
+     u8   magic[4]        "TSML"
+
+   One record, repeated `count` times:
+
+     u32  record_bytes    including this field, padded to a multiple of 4
+     u32  kind            see the table below
+     u32  region          a region index, or 0xFFFFFFFF for the whole tape
+     u64  from_ticks      the counter the label runs between, in the file's
+     u64  to_ticks        own base_time_unit_ns
+     u32  text_bytes
+     u8   text[]          UTF-8, not NUL-terminated
+
+   Because every record carries its own length, a reader steps over a kind it
+   does not know. The list can therefore grow without any existing reader
+   having to change.
+
+     kind  applies to    the text is
+     ----  ----------    -----------
+       1   a region      what the program recorded there is called
+       2   a region      which system wrote it, as a short token ("kcs1200")
+       3   the tape      where the recording came from, and when
+       4   either        what has to be done to load it
+
+   A reader must treat the section as absent - not as an error - when the magic
+   is missing, when `bytes` is larger than the file, or when a record runs past
+   the end of the section. Saying nothing about itself is what every TSM
+   written before this section existed does, and they are all still valid.
+
+   Counters are in ticks so that a label means the same thing whatever rate the
+   file is rendered at. Turning one into seconds is
+   `ticks * base_time_unit_ns / 1e9`.
+
+   Reference reader: `tsm5_read_labels()` in src/tsm_v5.c, which takes the file
+   in memory because the section is found from the end.
+
+
 -------------------------------------------------------------------------------
  3. C SOURCES
 -------------------------------------------------------------------------------

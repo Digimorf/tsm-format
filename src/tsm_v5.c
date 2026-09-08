@@ -14,7 +14,142 @@
 
 #include "tsm_v5.h"
 
+#include <stdlib.h>
 #include <string.h>
+
+static uint32_t tsm5_mem_u32(const uint8_t *data, uint64_t offset) {
+    return (uint32_t)data[offset]
+         | ((uint32_t)data[offset + 1] << 8)
+         | ((uint32_t)data[offset + 2] << 16)
+         | ((uint32_t)data[offset + 3] << 24);
+}
+
+static uint64_t tsm5_mem_u64(const uint8_t *data, uint64_t offset) {
+    return (uint64_t)tsm5_mem_u32(data, offset)
+         | ((uint64_t)tsm5_mem_u32(data, offset + 4) << 32);
+}
+
+uint32_t tsm5_read_labels(const uint8_t *data, uint64_t size, TSM5Label **out) {
+    uint32_t declared;
+    uint32_t section_bytes;
+    uint64_t start;
+    uint64_t end;
+    uint64_t at;
+    uint32_t found = 0;
+    uint32_t pass;
+    TSM5Label *labels = NULL;
+
+    if (out) {
+        *out = NULL;
+    }
+
+    if (!data || size < TSM5_LABEL_FOOTER_SIZE) {
+        return 0;
+    }
+
+    if (data[size - 4] != 'T' || data[size - 3] != 'S'
+     || data[size - 2] != 'M' || data[size - 1] != 'L') {
+        return 0;
+    }
+
+    declared      = tsm5_mem_u32(data, size - TSM5_LABEL_FOOTER_SIZE);
+    section_bytes = tsm5_mem_u32(data, size - TSM5_LABEL_FOOTER_SIZE + 4);
+
+    if ((uint64_t)section_bytes > size - TSM5_LABEL_FOOTER_SIZE) {
+        return 0;
+    }
+
+    start = size - TSM5_LABEL_FOOTER_SIZE - (uint64_t)section_bytes;
+    end   = size - TSM5_LABEL_FOOTER_SIZE;
+
+    /*
+        Twice over the same records: once to count what is really there, once
+        to build them. What the footer declares is not trusted as a length -
+        a truncated file would have it allocating for records it does not
+        have.
+    */
+    for (pass = 0; pass < 2; ++pass) {
+        uint32_t n = 0;
+
+        at = start;
+
+        while (at + TSM5_LABEL_HEADER_SIZE <= end && n < declared) {
+            uint32_t record_bytes = tsm5_mem_u32(data, at);
+            uint32_t text_bytes;
+
+            if (record_bytes < TSM5_LABEL_HEADER_SIZE
+             || at + (uint64_t)record_bytes > end) {
+                break;
+            }
+
+            text_bytes = tsm5_mem_u32(data, at + 28);
+
+            if ((uint64_t)text_bytes > record_bytes - TSM5_LABEL_HEADER_SIZE) {
+                text_bytes = record_bytes - TSM5_LABEL_HEADER_SIZE;
+            }
+
+            if (pass == 1) {
+                char *text = (char *)malloc((size_t)text_bytes + 1);
+
+                if (!text) {
+                    tsm5_free_labels(labels, n);
+                    return 0;
+                }
+
+                if (text_bytes) {
+                    memcpy(text, data + at + TSM5_LABEL_HEADER_SIZE, text_bytes);
+                }
+
+                text[text_bytes] = 0;
+
+                labels[n].kind       = tsm5_mem_u32(data, at + 4);
+                labels[n].region     = tsm5_mem_u32(data, at + 8);
+                labels[n].from_ticks = tsm5_mem_u64(data, at + 12);
+                labels[n].to_ticks   = tsm5_mem_u64(data, at + 20);
+                labels[n].text       = text;
+            }
+
+            at += record_bytes;
+            n += 1;
+        }
+
+        if (pass == 0) {
+            found = n;
+
+            if (!found) {
+                return 0;
+            }
+
+            labels = (TSM5Label *)calloc(found, sizeof(TSM5Label));
+
+            if (!labels) {
+                return 0;
+            }
+        }
+    }
+
+    if (out) {
+        *out = labels;
+    } else {
+        tsm5_free_labels(labels, found);
+    }
+
+    return found;
+}
+
+void tsm5_free_labels(TSM5Label *labels, uint32_t count) {
+    uint32_t i;
+
+    if (!labels) {
+        return;
+    }
+
+    for (i = 0; i < count; ++i) {
+        free(labels[i].text);
+    }
+
+    free(labels);
+}
 
 void tsm5_write_u16(FILE *file, uint16_t value) {
     fputc((int)(value & 0xff), file);

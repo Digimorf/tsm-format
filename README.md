@@ -26,6 +26,13 @@ A tape is a sequence of **regions**, and there are three kinds:
 | `SILENCE` / hold | 0 | The level stays where it was. No edges, a few bytes. |
 | `INDEXED_DELTA` | 3 | The signal itself, as the intervals between its edges. |
 
+A file may also carry a **label section**, appended after the payloads and
+found from the end: what the programs on the tape are called, which system
+wrote each region, where the recording came from, what has to be typed to load
+it. It is optional and invisible to a reader that does not want it — nothing
+before it moves, so a TSM with labels is a TSM without them plus bytes at the
+end.
+
 Long pilot tones and the silences between blocks cost almost nothing; the data
 blocks are a compact nibble stream with an escape for the intervals that do not
 fit the table. The tick is configurable and defaults to 4 µs, which is finer
