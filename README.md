@@ -54,7 +54,7 @@ region fields, the delta encoding, and the reasoning behind each.
 ## Building it
 
 ```
-make            # eleven tools into bin/
+make            # eight tools into bin/
 make check      # build them, then run each one
 ```
 
@@ -96,10 +96,7 @@ sine wave nobody needs.
 | `wav2tsm_indexed_v5` | A WAV recording of a tape becomes a TSM. |
 | `tsm2wav_v5` | And back again, for listening or for a real machine. |
 | `wav2bits_kcs` | KCS tapes straight to a bitstream, skipping TSM. |
-| `sc3000_wav_analyzer` | What is on this tape: blocks, leaders, timing. |
-| `sc3000_wav_guided_repair` | Repairs an SC-3000 BASIC tape using what the block says about itself — its header's length and its parity. |
-| `sc3000_wav_adaptive_repair` | Repairs by following the tape's own drifting timing. |
-| `wav_repair_kcs`, `wav_repair_kcs_framed` | The same for KCS generally, by cell and by frame. |
+| `wav_repair_kcs`, `wav_repair_kcs_framed` | Repair a KCS recording, by cell and by frame. |
 | `tsm_v5_indexed_audit` | Checks a TSM against itself: regions, deltas, totals. |
 | `wav_gap_scan` | Finds the silences, which is where a tape divides. |
 | `wav_tsm_advisor_v5_indexed` | Suggests the encoding parameters for a given recording. |

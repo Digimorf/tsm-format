@@ -33,10 +33,7 @@ TOOLS   := \
 	wav_gap_scan \
 	wav2bits_kcs \
 	wav_repair_kcs \
-	wav_repair_kcs_framed \
-	sc3000_wav_analyzer \
-	sc3000_wav_adaptive_repair \
-	sc3000_wav_guided_repair
+	wav_repair_kcs_framed
 
 TARGETS := $(addprefix $(BIN)/,$(TOOLS))
 

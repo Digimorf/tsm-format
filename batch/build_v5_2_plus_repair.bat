@@ -114,38 +114,6 @@ if errorlevel 1 goto build_error
 
 
 echo.
-echo [extra] Linking sc3000_wav_analyzer.exe
-gcc %CFLAGS% ^
-    "%SRC_DIR%\sc3000_wav_analyzer.c" ^
-    "%OBJ_DIR%\tsm_v5.o" ^
-    "%OBJ_DIR%\wav_io_simple.o" ^
-    "%OBJ_DIR%\indexed_common.o" ^
-    -o "%BIN_DIR%\sc3000_wav_analyzer.exe"
-if errorlevel 1 goto build_error
-
-
-echo.
-echo [extra] Linking sc3000_wav_adaptive_repair.exe
-gcc %CFLAGS% ^
-    "%SRC_DIR%\sc3000_wav_adaptive_repair.c" ^
-    "%OBJ_DIR%\tsm_v5.o" ^
-    "%OBJ_DIR%\wav_io_simple.o" ^
-    "%OBJ_DIR%\indexed_common.o" ^
-    -o "%BIN_DIR%\sc3000_wav_adaptive_repair.exe"
-if errorlevel 1 goto build_error
-
-
-echo.
-echo [extra] Linking sc3000_wav_guided_repair.exe
-gcc %CFLAGS% ^
-    "%SRC_DIR%\sc3000_wav_guided_repair.c" ^
-    "%OBJ_DIR%\tsm_v5.o" ^
-    "%OBJ_DIR%\wav_io_simple.o" ^
-    "%OBJ_DIR%\indexed_common.o" ^
-    -o "%BIN_DIR%\sc3000_wav_guided_repair.exe"
-if errorlevel 1 goto build_error
-
-echo.
 echo Build completed successfully.
 echo.
 pause
