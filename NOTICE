@@ -1,0 +1,31 @@
+TSM - Temporal Signal Medium
+Copyright (c) 2026 Francesco De Simone
+
+This product includes software developed by Francesco De Simone
+(https://github.com/Digimorf).
+
+The TSM format, its specification and this reference implementation are the
+work of Francesco De Simone.
+
+Section 4(d) of the Apache License, Version 2.0 requires that this NOTICE
+travel with the work: if you redistribute this software, or a work derived
+from it, in source or in binary form, the attribution above must appear in
+whatever the recipient sees - a NOTICE file of your own, your documentation,
+or the display the work itself generates.
+
+In plain words: use it, change it, build a product on it, sell it. Say where
+it came from.
+
+--------------------------------------------------------------------------
+THE SPECIFICATION
+
+SPECIFICATION.txt is a document, not software, and carries a licence of its
+own: Creative Commons Attribution 4.0 International (CC BY 4.0).
+
+    https://creativecommons.org/licenses/by/4.0/
+
+Anyone may implement the TSM format, in any language, for any purpose,
+commercial or not, without asking and without using a line of this code. What
+attribution asks is that the format be named as TSM, by Francesco De Simone.
+A format nobody may implement freely is not a format; one nobody has to credit
+loses its own history.

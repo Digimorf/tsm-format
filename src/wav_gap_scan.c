@@ -1,3 +1,17 @@
+/*
+ * TSM - Temporal Signal Medium
+ * Finds the silent gaps in a WAV, which become TSM regions.
+ *
+ * Copyright (c) 2026 Francesco De Simone
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. A copy is in LICENSE
+ * beside this file, and at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Redistributions and derivative works must carry the attribution in NOTICE.
+ */
+
 #include "wav_io_simple.h"
 #include "tsm_v5.h"
 

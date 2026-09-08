@@ -2,7 +2,7 @@
 setlocal
 
 set "SCRIPT_DIR=%~dp0"
-set "BIN_DIR=%SCRIPT_DIR%bin"
+set "BIN_DIR=%SCRIPT_DIR%..\bin"
 
 if "%~1"=="" (
     echo Drag and drop a TSM file onto this batch.

@@ -12,7 +12,7 @@ REM     kcs_extended
 REM ============================================================
 
 set "SCRIPT_DIR=%~dp0"
-set "BIN_DIR=%SCRIPT_DIR%bin"
+set "BIN_DIR=%SCRIPT_DIR%..\bin"
 
 if "%~1"=="" (
     echo.

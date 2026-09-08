@@ -8,9 +8,9 @@ REM Complete TSM v5.2 compact escape + repair build.
 REM ============================================================
 
 set "SCRIPT_DIR=%~dp0"
-set "SRC_DIR=%SCRIPT_DIR%src_v5"
-set "OBJ_DIR=%SCRIPT_DIR%obj"
-set "BIN_DIR=%SCRIPT_DIR%bin"
+set "SRC_DIR=%SCRIPT_DIR%..\src"
+set "OBJ_DIR=%SCRIPT_DIR%..\obj"
+set "BIN_DIR=%SCRIPT_DIR%..\bin"
 
 if not exist "%OBJ_DIR%" mkdir "%OBJ_DIR%"
 if not exist "%BIN_DIR%" mkdir "%BIN_DIR%"

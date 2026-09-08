@@ -11,7 +11,7 @@ REM   <name>_sc3000_adaptive_repair_report.txt
 REM ============================================================
 
 set "SCRIPT_DIR=%~dp0"
-set "BIN_DIR=%SCRIPT_DIR%bin"
+set "BIN_DIR=%SCRIPT_DIR%..\bin"
 
 if "%~1"=="" (
     echo Drag and drop an SC-3000 WAV file onto this batch.

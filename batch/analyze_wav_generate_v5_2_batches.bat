@@ -5,7 +5,7 @@ REM Drag-and-drop a WAV file.
 REM The advisor generates conversion/render batches next to the WAV.
 
 set "SCRIPT_DIR=%~dp0"
-set "BIN_DIR=%SCRIPT_DIR%bin"
+set "BIN_DIR=%SCRIPT_DIR%..\bin"
 
 if "%~1"=="" (
     echo Drag and drop a WAV file onto this batch.

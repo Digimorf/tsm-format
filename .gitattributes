@@ -1,0 +1,10 @@
+# Windows batch files are run by cmd.exe, which wants CRLF. Git must not
+# helpfully convert them on the way in or out, on anyone's machine.
+*.bat text eol=crlf
+
+# Everything else is text and can follow the platform.
+*.c    text
+*.h    text
+*.md   text
+*.txt  text
+Makefile text

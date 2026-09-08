@@ -1,11 +1,21 @@
 ===============================================================================
- TSM - CONTEXT FILE (format, toolchain, C sources, applications)
+ TSM - TEMPORAL SIGNAL MEDIUM
+ Format specification v5.2 "Compact Escape"
 ===============================================================================
 
- FOLDER NOTE: in the repository this folder is named "tms_format" (a historical
- typo of "TSM"). All format material - specification, C sources, batch files and
- binaries - lives here. The emulator side instead lives in
- src/machine/tape.c / tape.h and src/loader.c.
+ Copyright (c) 2026 Francesco De Simone.
+
+ This document is licensed under the Creative Commons Attribution 4.0
+ International licence (CC BY 4.0):
+
+     https://creativecommons.org/licenses/by/4.0/
+
+ Anyone may implement this format, in any language, for any purpose, commercial
+ or not, without asking and without using a line of the reference code. What
+ attribution asks is that the format be named as TSM, by Francesco De Simone.
+
+ The reference implementation beside this document is separately licensed under
+ the Apache License 2.0 - see LICENSE and NOTICE.
 
 
 -------------------------------------------------------------------------------
@@ -104,7 +114,7 @@
  3. C SOURCES
 -------------------------------------------------------------------------------
 
- 3.1 REFERENCE TOOLCHAIN - tms_format/src_v5/
+ 3.1 REFERENCE TOOLCHAIN - src/
  --------------------------------------------
    Build: build_v5_2_compact.bat (requires gcc in PATH, -std=c99 -O2 -Wall).
    Output in bin/. 8 compilation steps.
@@ -137,37 +147,37 @@
      tsm_v5_indexed_audit.c -> tsm_v5_indexed_audit.exe
         Structural diagnostics: dump of header, regions, delta table of a .tsm.
 
- 3.2 EMULATOR-SIDE DECODER - src/machine/tape.c / tape.h
- -------------------------------------------------------
-   The SE3K emulator has its own runtime TSM playback implementation
-   (independent of the CLI toolchain), because it must reproduce the FSK signal
-   to the virtual datacorder synchronized with the Z80 CPU cycles:
+ 3.2 OTHER IMPLEMENTATIONS
+ -------------------------
+   The tools in src/ are the reference, not the only way. TSM is deliberately
+   small enough that a player is a few hundred lines: a reader needs the header,
+   the region table, and the nibble stream of section 2.3.
 
-     - tape_load_tsm(t, data, size): parses the binary into tape_t
-       (fmt = TAPE_FMT_TSM); builds a tsm_region_t array reduced to the runtime
-       fields.
-     - Decode engine: tsm_enter_region(), tsm_decode_delta(), tsm_read_nibble(),
-       tsm_get_level(), tsm_advance_and_render(), tsm_seek_to_ms().
-     - Time conversions tsm_cyc_to_ticks() / tsm_ticks_to_cyc()
-       (CPU cycles <-> ticks, based on the region's time_unit_ns).
-     - TSM tapes have NO bitstream buffer (t->data == NULL): the signal level is
-       decoded on-the-fly on every PPI/datacorder read.
-     - Constants in tape.h: TSM_MODE_SILENCE/INDEXED_DELTA/ZERO_SILENCE,
-       TSM_NIBBLE_ESCAPE = 15, TSM_MAX_TABLE_ENTRIES = 15.
+   The author's own emulator carries a second, independent implementation - a
+   runtime decoder that renders the signal to a virtual datacorder in step with
+   the CPU rather than writing a WAV. It is not part of this repository, and
+   nothing here depends on it. It is worth mentioning only because the two were
+   written from this document separately, which is the test a specification has
+   to pass: two implementations that agree, neither of them consulting the
+   other's code.
 
- 3.3 LOADER / DISTRIBUTION - src/loader.c
- ----------------------------------------
-     - Steganographic PNG container: footer with magic "TSM5" -> tape_load_tsm();
-       the jCard is injected separately. Lets you distribute a tape as a normal
-       PNG image.
-     - Raw .tsm binary: load_tsm_tape() -> tape_load_tsm().
+   What a playback implementation must get right, and nothing else:
+
+     - Enter each region at the level in its reserved0 field.
+     - ZERO_SILENCE emits no signal for its duration; SILENCE holds the level.
+     - In INDEXED_DELTA, read nibbles low half first; nibble 15 is the escape
+       and is followed by a 32-bit little-endian raw delta.
+     - Each delta is a number of ticks of that region's own time_unit_ns, and
+       every delta is a toggle.
+     - A region's duration is authoritative: a stream that runs out early holds
+       its last level, and one that overruns is truncated.
 
 
 -------------------------------------------------------------------------------
  4. UTILITIES AND WORKFLOW
 -------------------------------------------------------------------------------
 
- 4.1 DRAG-AND-DROP BATCH FILES (tms_format/)
+ 4.1 DRAG-AND-DROP BATCH FILES (batch/, Windows)
  -------------------------------------------
    analyze_wav_generate_v5_2_batches.bat
       Drop a WAV -> advisor -> _v5_2_advisor.txt report + batch
@@ -180,6 +190,9 @@
       Drop a WAV -> gap report (threshold 0.03, min 20 ms).
    build_v5_2_compact.bat
       Builds the whole toolchain.
+
+   On anything else, and on Windows with make installed, the Makefile beside
+   this document builds the same eleven tools:  make  and  make check .
 
  4.2 DEFAULT PARAMETERS (advisor)
  --------------------------------
@@ -196,22 +209,12 @@
    4. Test the re-rendered WAV (tsm2wav) and compare gaps (wav_gap_scan).
    5. Try I8 / I4 for more compactness.
 
- 4.4 PYTHON GUI - Tape_Factory GUI/
- ----------------------------------
-   SE3K Tape Factory tools (SE3K header, author F. De Simone):
-     - tape_factory_gui_integrated.py : main tape authoring GUI.
-     - tsm_analyzer_tk.py : structural validator and block analyzer: parses the
-       TSM binary, FSK-demodulates each INDEXED_DELTA region, detects SC-3000 KCS
-       block headers (0x16 sync + 0x24 delimiter) and shows a scrollable
-       checklist with per-block memos, insertable into the J-card text box.
-     - analyze_tsm_pngs.py, tape_waveform.py / tape_waveform_tk.py,
-       wav_inspector_tk.py, tape_inspector.py, tape_check.py : inspection and
-       waveform / TSM-in-PNG visualization.
-
- 4.5 VALIDATION STATUS (VALIDATION_NOTES.md)
- -------------------------------------------
-   ZX Spectrum: OK with reconstructed WAVs, I16 baseline.
+ 4.4 VALIDATION STATUS
+ ---------------------
+   ZX Spectrum : OK with reconstructed WAVs, I16 baseline.
    MSX cassette: OK with reconstructed WAVs.
+   Sega SC-3000: OK on original recordings; a WAV encoded to TSM and rendered
+                 back decodes to the same bytes, front for front.
 
 
 -------------------------------------------------------------------------------
@@ -230,13 +233,15 @@
          * standard KCS (SC-3000/SG-1000, MSX),
          * the ZX Spectrum ROM loader,
          * turbo loaders and custom loaders,
-         * multi-format / mixed tapes (e.g. an SC-3000 loader with ZX Spectrum
-           formatted data on the same tape - a real case handled by SE3K),
+         * multi-format / mixed tapes - a real one exists: a Sega SC-3000
+           BASIC loader followed by blocks written in the ZX Spectrum's pulse
+           protocol, on the same cassette, read and re-encoded as one TSM,
          * timing-based protection schemes.
-     - Hardware-level playback. In SE3K the TSM is fed to the virtual datacorder,
-       which FSK-demodulates it exactly like the real machine would (see tape.c),
-       instead of "injecting" already-decoded bytes. This maximizes compatibility
-       with the original loaders.
+     - Hardware-level playback. An emulator can feed a TSM to its virtual
+       datacorder and let the machine's own loader demodulate it, exactly as the
+       real one would, instead of injecting already-decoded bytes. That is what
+       keeps the original loaders - including the ones nobody has documented -
+       working unchanged.
      - Compactness with fidelity. Hold/zero-silence compress the long pilot tones
        and the silences; the nibble+escape stream keeps the data blocks small
        while preserving tick-level accuracy (4 us by default).
@@ -267,13 +272,13 @@
  6. QUICK REFERENCES
 -------------------------------------------------------------------------------
 
-   Format specification   tms_format/TSM_v5_2_FORMAT_SPEC.md
-   Toolchain README       tms_format/README_TSM_V5_2_COMPACT_ESCAPE.md
-   Validation notes        tms_format/VALIDATION_NOTES.md
-   C header/structs       tms_format/src_v5/tsm_v5.h
-   Build toolchain        tms_format/build_v5_2_compact.bat
-   Emulator decoder       src/machine/tape.c, src/machine/tape.h
-   PNG/TSM loader         src/loader.c
-   Authoring GUI          Tape_Factory GUI/
+   This document         SPECIFICATION.txt  (CC BY 4.0)
+   C header and structs  src/tsm_v5.h
+   Reference encoder     src/wav2tsm_indexed_v5.c
+   Reference renderer    src/tsm2wav_v5.c
+   Structural audit      src/tsm_v5_indexed_audit.c
+   Build, any platform   Makefile          (make, make check)
+   Build, Windows only   batch/build_v5_2_compact.bat
+   Licence, code         LICENSE, NOTICE   (Apache-2.0)
 
 ===============================================================================

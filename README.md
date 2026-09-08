@@ -39,16 +39,36 @@ region fields, the delta encoding, and the reasoning behind each.
 
 | Folder | What it is |
 |---|---|
-| `SPECIFICATION.txt` | The format, the toolchain, and what each source file does. |
+| `SPECIFICATION.txt` | The format itself: every field, the encoding, and the reasoning behind each. |
 | `src/` | The reference implementation in C99: reading and writing TSM, converting WAV in and out, and the repair tools built on top. |
 | `batch/` | Windows drag-and-drop wrappers: drop a WAV on one and it does the job. |
 
-The C is plain C99 with no dependencies beyond the standard library. There is no
-build system on purpose — `build_v5_2_compact.bat` and
-`build_v5_2_plus_repair.bat` are two `cl` (or `gcc`) command lines and they are
-readable enough to translate to whatever you use.
+## Building it
 
-### The tools
+```
+make            # eleven tools into bin/
+make check      # build them, then run each one
+```
+
+C99, nothing beyond the standard library and `libm`, clean under `-Wall
+-Wextra`. On Windows without `make`, `batch/build_v5_2_compact.bat` does the
+same with plain `gcc` lines.
+
+## A tape, there and back
+
+```
+bin/wav2tsm_indexed_v5  tape.wav  tape.tsm  4000 16 0.35 1 8.0
+bin/tsm_v5_indexed_audit          tape.tsm
+bin/tsm2wav_v5                    tape.tsm  again.wav 44100
+```
+
+On a Sega SC-3000 recording of 600 known bytes: a 910 KB WAV becomes an 18 KB
+TSM — fifty times smaller — and renders back to a WAV of exactly the same
+length, which decodes to the same 600 bytes across the same 34,793 edges. The
+saving is not in throwing anything away. It is in not storing the shape of a
+sine wave nobody needs.
+
+## Every tool
 
 | Tool | What it does |
 |---|---|
@@ -77,17 +97,34 @@ behaves exactly as it did with the tape: the loader is not bypassed, it is fed.
 
 ## Where it came from, and where it is going
 
-TSM was built for **SE3K**, a Sega SC-3000 / SG-1000 emulator, whose virtual
-datacorder FSK-demodulates a TSM the way the real SR-1000 demodulated a
-cassette. It is published separately because nothing in the format is about
-Sega, and a preservation format that only one emulator understands is not a
-format.
+TSM was written by Francesco De Simone while building an emulator that needed a
+tape format able to hold anything a cassette could carry. That emulator is a
+separate project and is not required here: nothing in this repository depends on
+it, and nothing in the format is about any one machine. It is worth a mention
+only because the format has been implemented twice, independently, from the
+document in `SPECIFICATION.txt` — which is the test a specification has to
+pass.
 
-What would make it one: readers in other emulators, a converter to and from the
-formats that already exist, and other people's tapes proving the parts of the
-model that a Sega collection cannot exercise. The specification is the whole
-contract — if something in it is ambiguous, that is a bug and worth reporting.
+What would make it a standard rather than one person's format: readers in other
+emulators, converters to and from the formats that already exist, and other
+people's tapes exercising the parts of the model that a single collection
+cannot. The specification is the whole contract. If something in it is
+ambiguous, that is a bug and worth reporting.
 
 ## Licence
 
-MIT — see `LICENSE`.
+Two licences, because there are two different things here.
+
+**The specification** (`SPECIFICATION.txt`) is under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Implement TSM in any
+language, for any purpose, commercial or not, without asking and without using
+a line of this code. Name the format as TSM, by Francesco De Simone. A format
+nobody may implement freely is not a format.
+
+**The reference implementation** (`src/`, `batch/`, `Makefile`) is under the
+[Apache License 2.0](LICENSE). Use it, change it, ship it inside a product,
+sell it. What Apache asks in return is its section 4(d): the attribution in
+[`NOTICE`](NOTICE) travels with the work, so wherever the code ends up, where
+it came from goes with it.
+
+Copyright (c) 2026 Francesco De Simone.

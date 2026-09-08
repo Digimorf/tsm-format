@@ -1,3 +1,17 @@
+/*
+ * TSM - Temporal Signal Medium
+ * WAV to TSM v5.2: the reference encoder.
+ *
+ * Copyright (c) 2026 Francesco De Simone
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. A copy is in LICENSE
+ * beside this file, and at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Redistributions and derivative works must carry the attribution in NOTICE.
+ */
+
 #include "tsm_v5.h"
 #include "wav_io_simple.h"
 #include "indexed_common.h"
@@ -102,10 +116,12 @@ static void byte_buffer_init(ByteBuffer *buffer) {
     buffer->high_half = 0;
 }
 
-static void byte_buffer_free(ByteBuffer *buffer) {
-    free(buffer->data);
-    memset(buffer, 0, sizeof(*buffer));
-}
+/*
+ * There is no byte_buffer_free(). A payload buffer does not own its memory for
+ * long: encode_nibble_escape_payload() hands buffer->data to the region it was
+ * built for and the region list owns it from there. A free() beside the init()
+ * would look symmetric and be wrong.
+ */
 
 static void byte_buffer_reserve(ByteBuffer *buffer, uint64_t required) {
     uint64_t new_capacity;
