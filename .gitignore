@@ -9,3 +9,8 @@ bin/
 *.wav
 *.tsm
 *.bit
+
+# WebAssembly build output: web/build.sh makes these from the sources above.
+web/tsm.js
+web/tsm-node.js
+web/*.wasm

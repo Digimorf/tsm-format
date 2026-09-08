@@ -49,6 +49,7 @@ region fields, the delta encoding, and the reasoning behind each.
 | `SPECIFICATION.txt` | The format itself: every field, the encoding, and the reasoning behind each. |
 | `src/` | The reference implementation in C99: reading and writing TSM, converting WAV in and out, and the repair tools built on top. |
 | `batch/` | Windows drag-and-drop wrappers: drop a WAV on one and it does the job. |
+| `web/` | The same sources built to WebAssembly, so a page can read a TSM and play it without a server. |
 
 ## Building it
 
@@ -60,6 +61,19 @@ make check      # build them, then run each one
 C99, nothing beyond the standard library and `libm`, clean under `-Wall
 -Wextra`. On Windows without `make`, `batch/build_v5_2_compact.bat` does the
 same with plain `gcc` lines.
+
+## In a browser
+
+```
+web/build.sh            # needs emcc on PATH; writes web/tsm.js and web/tsm.wasm
+```
+
+Two entry points: `tsm_web_describe()` returns the regions and labels as JSON,
+`tsm_web_render()` returns the signal as float samples ready for Web Audio.
+Both are thin: the renderer is `tsm2wav_v5.c` exactly as it ships, with only
+its entry point renamed, so the page and `bin/tsm2wav_v5` cannot drift apart.
+On a 106-second tape the two agree sample for sample, and the render takes
+about a third of a second.
 
 ## A tape, there and back
 
