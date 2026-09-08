@@ -1,0 +1,90 @@
+# TSM - Temporal Signal Medium
+# Build the player and publish it to tsm-format.org.
+#
+# Copyright (c) 2026 Francesco De Simone
+# SPDX-License-Identifier: Apache-2.0
+#
+# The decoder is not committed: it is tsm2wav_v5.c compiled to WebAssembly, and
+# a build product does not belong in a repository of sources. So the site is
+# built here, from the same sources anyone else would clone, every time main
+# changes. What is published can therefore never be a stale decoder against a
+# newer page - the two are made together or not at all.
+#
+# Only first-party actions are used. Emscripten is installed from its own
+# repository rather than through a third-party action, so nothing outside
+# GitHub and emscripten-core can decide what runs here.
+
+name: Publish the player
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# What the deployment needs, and nothing more.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time. A queued run is not cancelled, so the last push
+# wins rather than the fastest.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  # Pinned, so the published decoder does not change because a toolchain did.
+  EMSDK_VERSION: 4.0.15
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Check out the sources
+        uses: actions/checkout@v4
+
+      - name: Build the reference tools
+        # Not needed for the page, but if the C sources stop compiling the
+        # site should fail loudly here rather than ship a page built from
+        # something that no longer builds anywhere else.
+        run: make check
+
+      - name: Install Emscripten
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git
+          emsdk/emsdk install "$EMSDK_VERSION"
+          emsdk/emsdk activate "$EMSDK_VERSION"
+
+      - name: Build the decoder
+        run: |
+          source emsdk/emsdk_env.sh
+          ./web/build.sh
+
+      - name: Assemble the site
+        # Only what the page loads. build.sh, tsm_web.c and .htaccess stay in
+        # the repository where they are read; serving them would put sources at
+        # a URL for no reason, and .htaccess does nothing on GitHub Pages.
+        run: |
+          mkdir -p _site
+          cp web/index.html web/player.js web/tsm.js web/tsm.wasm _site/
+          cp web/CNAME _site/
+          ls -l _site
+
+      - name: Upload it
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

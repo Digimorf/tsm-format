@@ -5,6 +5,11 @@
 # Apache reads .htaccess on a Linux host: carriage returns end up inside
 # directive values, and a continuation followed by one breaks the file.
 .htaccess text eol=lf
+*.yml  text eol=lf
+
+# GitHub Pages reads CNAME as the domain name itself. A trailing carriage
+# return would make it a domain that does not exist.
+CNAME  text eol=lf
 
 # Shell scripts are run by sh, which chokes on a carriage return. They keep
 # LF on every platform, the mirror image of the rule above.

@@ -50,6 +50,7 @@ region fields, the delta encoding, and the reasoning behind each.
 | `src/` | The reference implementation in C99: reading and writing TSM, converting WAV in and out, and the repair tools built on top. |
 | `batch/` | Windows drag-and-drop wrappers: drop a WAV on one and it does the job. |
 | `web/` | The same sources built to WebAssembly, and a player page that runs them. |
+| `.github/` | The workflow that builds the player and publishes it. |
 
 ## Building it
 
@@ -85,10 +86,20 @@ WebAssembly from `file://`:
 cd web && python -m http.server 8000     # then open http://localhost:8000/
 ```
 
-To publish it, run `web/build.sh` and upload five files from `web/`:
-`index.html`, `player.js`, `tsm.js`, `tsm.wasm` and `.htaccess`. Nothing else
-is needed and there is no server side — the decoding happens in the visitor's
-browser, and no tape ever leaves their machine.
+Pushing to `main` publishes it. `.github/workflows/pages.yml` installs
+Emscripten, builds the tools, builds the decoder from these same sources and
+deploys to GitHub Pages, which serves it over HTTPS. The decoder is never
+committed — it is a build product — so what goes out is always a page and a
+decoder made together, and a clone of this repository is enough to reproduce
+the site exactly.
+
+To host it elsewhere instead, run `web/build.sh` and upload four files from
+`web/`: `index.html`, `player.js`, `tsm.js` and `tsm.wasm`. On Apache add
+`web/.htaccess`, which gives `.wasm` its type; GitHub Pages already serves it
+correctly, which is why the workflow does not publish that file.
+
+There is no server side either way. The decoding happens in the visitor's
+browser and no tape ever leaves their machine.
 
 What it draws over the tape is the rate at which the signal changes, not a peak
 envelope. A carrier tone fills every column of an envelope from edge to edge,
