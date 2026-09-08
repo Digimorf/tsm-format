@@ -49,7 +49,7 @@ region fields, the delta encoding, and the reasoning behind each.
 | `SPECIFICATION.txt` | The format itself: every field, the encoding, and the reasoning behind each. |
 | `src/` | The reference implementation in C99: reading and writing TSM, converting WAV in and out, and the repair tools built on top. |
 | `batch/` | Windows drag-and-drop wrappers: drop a WAV on one and it does the job. |
-| `web/` | The same sources built to WebAssembly, so a page can read a TSM and play it without a server. |
+| `web/` | The same sources built to WebAssembly, and a player page that runs them. |
 
 ## Building it
 
@@ -74,6 +74,21 @@ Both are thin: the renderer is `tsm2wav_v5.c` exactly as it ships, with only
 its entry point renamed, so the page and `bin/tsm2wav_v5` cannot drift apart.
 On a 106-second tape the two agree sample for sample, and the render takes
 about a third of a second.
+
+`web/player.html` is a deck built on them. Drop a `.tsm` on it and it plays,
+winds, and runs backwards; it lists the regions, and the labels of section 2.5
+if the file carries any. Serve the folder over HTTP — a browser will not fetch
+WebAssembly from `file://`:
+
+```
+cd web && python -m http.server 8000     # then open /player.html
+```
+
+What it draws over the tape is the rate at which the signal changes, not a peak
+envelope. A carrier tone fills every column of an envelope from edge to edge,
+so the whole tape comes out one solid block; the rate of change is the thing a
+TSM actually stores, and it tells a pilot tone from data and one protocol from
+another at a glance. There is no recording feature. A player writes nothing.
 
 ## A tape, there and back
 

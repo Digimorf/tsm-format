@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<!--
+  TSM - Temporal Signal Medium
+  A page that plays a tape.
+
+  Copyright (c) 2026 Francesco De Simone
+  SPDX-License-Identifier: Apache-2.0
+
+  Licensed under the Apache License, Version 2.0. A copy is in LICENSE beside
+  this file, and at http://www.apache.org/licenses/LICENSE-2.0
+  Redistributions and derivative works must carry the attribution in NOTICE.
+
+  Everything visual here is meant to be replaced. The colours, the shapes and
+  the type are all set from the custom properties in :root below, and player.js
+  finds its controls by id and by data-cmd, never by how they look. A different
+  skin is a different stylesheet, not a different player.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TSM Player</title>
+<style>
+
+/* ============================================================
+   Skin — everything a different look needs to change
+   ============================================================ */
+:root {
+  --paper:        #14120f;
+  --panel:        #1c1916;
+  --panel-edge:   #2b2621;
+  --ink:          #e8e2d8;
+  --ink-dim:      #9a9186;
+  --ink-faint:    #635c53;
+  --accent:       #7fd1a4;
+  --accent-dim:   #3f6b53;
+  --warn:         #d8a657;
+
+  --wave-bg:      #12100e;
+  --wave-ink:     #7fd1a4;
+  --wave-idle:    #3a352e;
+  --band-signal:  #1d2b24;
+  --band-quiet:   #171514;
+
+  --radius:       10px;
+  --font:         ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-text:    system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* ============================================================
+   Page
+   ============================================================ */
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 2rem 1.25rem 4rem;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-text);
+  line-height: 1.55;
+}
+
+main { max-width: 62rem; margin: 0 auto; }
+
+/* ---- header ---- */
+header { margin-bottom: 2rem; }
+
+#logo {
+  width: 3.5rem; height: 3.5rem;
+  border: 2px solid var(--accent-dim);
+  border-radius: var(--radius);
+  display: grid; place-items: center;
+  color: var(--accent);
+  font-family: var(--font);
+  font-size: 0.7rem; letter-spacing: 0.1em;
+  margin-bottom: 1rem;
+}
+
+h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.6rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.tagline { margin: 0 0 1rem; color: var(--ink-dim); max-width: 46rem; }
+
+.links a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid var(--accent-dim);
+  margin-right: 1.25rem;
+  font-size: 0.9rem;
+}
+.links a:hover { border-bottom-color: var(--accent); }
+
+/* ============================================================
+   The deck
+   ============================================================ */
+#drop-zone {
+  border: 1px dashed transparent;
+  border-radius: calc(var(--radius) + 4px);
+  transition: border-color 0.15s, background 0.15s;
+  padding: 2px;
+}
+#drop-zone.dragging {
+  border-color: var(--accent);
+  background: rgba(127, 209, 164, 0.05);
+}
+
+#deck {
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+}
+
+/* ---- reels and counter ---- */
+.mech {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.reel {
+  width: 3.25rem; height: 3.25rem;
+  border-radius: 50%;
+  border: 2px solid var(--panel-edge);
+  background:
+    conic-gradient(from 0deg,
+      var(--panel-edge) 0deg 12deg, transparent 12deg 90deg,
+      var(--panel-edge) 90deg 102deg, transparent 102deg 180deg,
+      var(--panel-edge) 180deg 192deg, transparent 192deg 270deg,
+      var(--panel-edge) 270deg 282deg, transparent 282deg 360deg);
+  position: relative;
+  flex: none;
+}
+.reel::after {
+  content: "";
+  position: absolute; inset: 38%;
+  border-radius: 50%;
+  background: var(--ink-faint);
+}
+
+.readout { flex: 1; display: flex; align-items: baseline; gap: 1.25rem; }
+
+#counter {
+  font-family: var(--font);
+  font-size: 2rem;
+  letter-spacing: 0.12em;
+  color: var(--warn);
+  background: #0d0b0a;
+  border: 1px solid var(--panel-edge);
+  border-radius: 4px;
+  padding: 0.1rem 0.5rem;
+}
+
+.times { font-family: var(--font); color: var(--ink-dim); font-size: 0.95rem; }
+#time-now { color: var(--ink); }
+
+#tape-name {
+  margin-left: auto;
+  font-family: var(--font);
+  font-size: 0.85rem;
+  color: var(--ink-dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 18rem;
+}
+
+/* ---- waveform ---- */
+.wave-wrap {
+  position: relative;
+  margin-bottom: 1rem;
+  border: 1px solid var(--panel-edge);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+#wave { display: block; width: 100%; height: 110px; cursor: crosshair; }
+
+#playhead {
+  position: absolute; top: 0; bottom: 0;
+  width: 2px; margin-left: -1px;
+  background: var(--warn);
+  pointer-events: none;
+  display: none;
+}
+
+/* ---- transport ---- */
+.transport { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+button {
+  font-family: var(--font);
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  background: #262119;
+  border: 1px solid var(--panel-edge);
+  border-bottom-width: 3px;
+  border-radius: 5px;
+  padding: 0.55rem 0.9rem;
+  cursor: pointer;
+  transition: transform 0.06s, background 0.15s, color 0.15s;
+}
+button:hover:not(:disabled) { background: #2f2920; }
+button:active:not(:disabled) { transform: translateY(1px); border-bottom-width: 2px; }
+button:disabled { opacity: 0.35; cursor: default; }
+button.engaged {
+  background: var(--accent-dim);
+  color: #0d1611;
+  border-color: var(--accent);
+}
+
+.spacer { flex: 1; }
+
+label.file {
+  font-family: var(--font); font-size: 0.8rem; letter-spacing: 0.06em;
+  color: var(--ink);
+  background: #262119;
+  border: 1px solid var(--panel-edge); border-bottom-width: 3px;
+  border-radius: 5px; padding: 0.55rem 0.9rem; cursor: pointer;
+}
+label.file:hover { background: #2f2920; }
+#file-input { display: none; }
+
+#status {
+  margin-top: 0.9rem;
+  font-family: var(--font);
+  font-size: 0.8rem;
+  color: var(--ink-dim);
+  min-height: 1.2em;
+}
+
+/* ============================================================
+   What the file says
+   ============================================================ */
+/* The file's own figures are short and fixed; a label is a sentence somebody
+   wrote and needs the width. So they do not share a column. */
+.panels {
+  display: grid;
+  grid-template-columns: minmax(14rem, 20rem) 1fr;
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 46rem) {
+  .panels { grid-template-columns: 1fr; }
+}
+
+section.panel {
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.25rem;
+}
+
+section.panel h2 {
+  margin: 0 0 0.85rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+  font-weight: 600;
+}
+
+#info { display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 1rem; margin: 0; }
+#info dt { color: var(--ink-dim); font-size: 0.85rem; }
+#info dd { margin: 0; font-family: var(--font); font-size: 0.85rem; }
+
+.wide { grid-column: 1 / -1; }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+th {
+  text-align: left; font-weight: 500; color: var(--ink-faint);
+  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em;
+  padding-bottom: 0.4rem; border-bottom: 1px solid var(--panel-edge);
+}
+td { padding: 0.32rem 0.5rem 0.32rem 0; font-family: var(--font); }
+td.n { color: var(--ink-dim); }
+tr.quiet td { color: var(--ink-faint); }
+tr.signal td:nth-child(3) { color: var(--accent); }
+td.profile { color: #9dbfe0; }
+
+#label-list { list-style: none; margin: 0; padding: 0; }
+#label-list li {
+  display: grid;
+  grid-template-columns: 4.6rem 6rem 1fr;
+  gap: 0.6rem; align-items: baseline;
+  padding: 0.4rem 0; border-bottom: 1px solid var(--panel-edge);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 34rem) {
+  #label-list li { grid-template-columns: 4.6rem 1fr; }
+  #label-list .text { grid-column: 1 / -1; }
+}
+#label-list li:last-child { border-bottom: 0; }
+#label-list li.none { color: var(--ink-faint); display: block; }
+
+.kind {
+  font-family: var(--font); font-size: 0.68rem;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  padding: 0.1rem 0.4rem; border-radius: 3px;
+  background: #2b2621; color: var(--ink-dim);
+  text-align: center;
+}
+.k-name    { background: var(--accent-dim); color: #0d1611; }
+.k-profile { background: #2f4258; color: #cfe3f5; }
+.k-origin  { background: #4a3c22; color: #f0dcb4; }
+.k-load    { background: #4a2f3c; color: #f3ccdd; }
+
+.where { color: var(--ink-faint); font-family: var(--font);
+         font-size: 0.75rem; }
+.text  { color: var(--ink); }
+
+footer {
+  margin-top: 2.5rem; padding-top: 1.25rem;
+  border-top: 1px solid var(--panel-edge);
+  color: var(--ink-faint); font-size: 0.8rem;
+}
+footer a { color: var(--ink-dim); }
+
+@media (max-width: 40rem) {
+  .mech { flex-wrap: wrap; }
+  #tape-name { margin-left: 0; max-width: 100%; }
+}
+
+</style>
+</head>
+<body>
+
+<main>
+
+<!-- ============================================================ -->
+<!-- Header                                                        -->
+<!-- ============================================================ -->
+<header>
+  <div id="logo">TSM</div>
+  <h1>TSM Player</h1>
+  <p class="tagline">
+    A cassette does not store bytes. It stores a signal that changes level, and
+    a TSM stores when those changes happened — nothing about what they meant.
+    Drop one here and it plays, the way the tape did.
+  </p>
+  <p class="links">
+    <a href="https://github.com/&lt;user&gt;/tsm-format">The format on GitHub</a>
+    <a href="https://github.com/&lt;user&gt;/tsm-format/blob/main/SPECIFICATION.txt">Specification</a>
+  </p>
+</header>
+
+<!-- ============================================================ -->
+<!-- The deck                                                      -->
+<!-- ============================================================ -->
+<div id="drop-zone">
+  <div id="deck" data-state="empty">
+
+    <div class="mech">
+      <div class="reel" id="reel-l"></div>
+      <div class="reel" id="reel-r"></div>
+      <div class="readout">
+        <span id="counter">000</span>
+        <span class="times"><span id="time-now">0:00</span> / <span id="time-total">0:00</span></span>
+        <span id="tape-name">—</span>
+      </div>
+    </div>
+
+    <div class="wave-wrap">
+      <canvas id="wave"></canvas>
+      <div id="playhead"></div>
+    </div>
+
+    <div class="transport">
+      <button data-cmd="REWIND"  title="Rewind (Left arrow)">&#9664;&#9664;</button>
+      <button data-cmd="REVERSE" title="Play backwards (R)">&#9664;</button>
+      <button data-cmd="PLAY"    title="Play (Space)">&#9654;</button>
+      <button data-cmd="FORWARD" title="Fast forward (Right arrow)">&#9654;&#9654;</button>
+      <button data-cmd="STOP"    title="Stop (Down arrow)">&#9632;</button>
+      <button data-cmd="RESET"   title="Zero the counter (0)">0 &nbsp;RESET</button>
+      <span class="spacer"></span>
+      <button data-cmd="EJECT"   title="Eject">&#9650; EJECT</button>
+      <label class="file" for="file-input">OPEN&hellip;</label>
+      <input type="file" id="file-input" accept=".tsm">
+    </div>
+
+    <div id="status"></div>
+
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- What the file says about itself                               -->
+<!-- ============================================================ -->
+<div class="panels">
+
+  <section class="panel">
+    <h2>The file</h2>
+    <dl id="info"></dl>
+  </section>
+
+  <section class="panel">
+    <h2>Labels</h2>
+    <ul id="label-list">
+      <li class="none">Load a tape to see what it says about itself.</li>
+    </ul>
+  </section>
+
+  <section class="panel wide">
+    <h2>Regions</h2>
+    <table>
+      <thead>
+        <tr><th>#</th><th>Span</th><th>Mode</th><th>Payload</th><th>Profile</th><th>Name</th></tr>
+      </thead>
+      <tbody id="region-list"></tbody>
+    </table>
+  </section>
+
+</div>
+
+<footer>
+  <p>
+    The decoding here is the reference tool itself, compiled to WebAssembly —
+    not a second implementation — so this page and <code>bin/tsm2wav_v5</code>
+    render the same tape identically, sample for sample.
+    There is no recording feature: a player writes nothing.
+  </p>
+  <p>Copyright &copy; 2026 Francesco De Simone. Apache-2.0.</p>
+</footer>
+
+</main>
+
+<script src="tsm.js"></script>
+<script src="player.js"></script>
+
+</body>
+</html>
