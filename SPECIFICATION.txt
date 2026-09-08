@@ -248,8 +248,6 @@
    analyze_wav_generate_v5_2_batches.bat
       Drop a WAV -> advisor -> _v5_2_advisor.txt report + batch
       TSM_v5_2_I16_<file>.bat.
-   castool_to_wav_dragdrop.bat
-      Wrapper for MAME castool: container/tape (e.g. .cas, fmsx) -> WAV.
    tsm_v5_indexed_audit_dragdrop.bat
       Drop a .tsm -> audit report.
    wav_gap_scan_dragdrop.bat
@@ -258,7 +256,7 @@
       Builds the whole toolchain.
 
    On anything else, and on Windows with make installed, the Makefile beside
-   this document builds the same eleven tools:  make  and  make check .
+   this document builds the same five tools:  make  and  make check .
 
  4.2 DEFAULT PARAMETERS (advisor)
  --------------------------------
@@ -269,7 +267,8 @@
 
  4.3 TYPICAL WORKFLOW
  --------------------
-   1. If needed, convert the source (container/tape) to WAV (castool_to_wav).
+   1. Start from a WAV. If the recording is in some other container, convert
+      it first with whatever tool reads that container faithfully.
    2. Drop the WAV onto analyze_wav_generate_v5_2_batches.bat.
    3. Run the generated TSM_v5_2_I16_<file>.bat first (I16 baseline).
    4. Test the re-rendered WAV (tsm2wav) and compare gaps (wav_gap_scan).

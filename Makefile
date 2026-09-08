@@ -30,10 +30,7 @@ TOOLS   := \
 	tsm2wav_v5 \
 	tsm_v5_indexed_audit \
 	wav_tsm_advisor_v5_indexed \
-	wav_gap_scan \
-	wav2bits_kcs \
-	wav_repair_kcs \
-	wav_repair_kcs_framed
+	wav_gap_scan
 
 TARGETS := $(addprefix $(BIN)/,$(TOOLS))
 
