@@ -75,14 +75,20 @@ its entry point renamed, so the page and `bin/tsm2wav_v5` cannot drift apart.
 On a 106-second tape the two agree sample for sample, and the render takes
 about a third of a second.
 
-`web/player.html` is a deck built on them. Drop a `.tsm` on it and it plays,
+`web/index.html` is a deck built on them, and is what runs at
+[tsm-format.org](https://tsm-format.org). Drop a `.tsm` on it and it plays,
 winds, and runs backwards; it lists the regions, and the labels of section 2.5
 if the file carries any. Serve the folder over HTTP — a browser will not fetch
 WebAssembly from `file://`:
 
 ```
-cd web && python -m http.server 8000     # then open /player.html
+cd web && python -m http.server 8000     # then open http://localhost:8000/
 ```
+
+To publish it, run `web/build.sh` and upload five files from `web/`:
+`index.html`, `player.js`, `tsm.js`, `tsm.wasm` and `.htaccess`. Nothing else
+is needed and there is no server side — the decoding happens in the visitor's
+browser, and no tape ever leaves their machine.
 
 What it draws over the tape is the rate at which the signal changes, not a peak
 envelope. A carrier tone fills every column of an envelope from edge to edge,

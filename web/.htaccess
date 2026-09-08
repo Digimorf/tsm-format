@@ -1,0 +1,32 @@
+# TSM - Temporal Signal Medium
+# Server settings for tsm-format.org
+#
+# Copyright (c) 2026 Francesco De Simone
+# SPDX-License-Identifier: Apache-2.0
+
+# Without this the .wasm arrives as octet-stream and the browser cannot compile
+# it while it downloads. Emscripten falls back to compiling from a buffer, so
+# the page still works - it just loads slower and complains in the console.
+AddType application/wasm .wasm
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/plain \
+                                application/javascript application/wasm
+</IfModule>
+
+# The decoder is rebuilt under the same names, so a visitor holding an old copy
+# would be running an old decoder against a new page. Revalidating costs one
+# round trip and cannot serve a stale pair.
+<IfModule mod_headers.c>
+  <FilesMatch "\.(html|js|wasm)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>
+
+# A tape is the visitor's own file and is read in their browser. Nothing here
+# needs to be framed by anyone else.
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
