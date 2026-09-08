@@ -2,6 +2,10 @@
 # helpfully convert them on the way in or out, on anyone's machine.
 *.bat text eol=crlf
 
+# Apache reads .htaccess on a Linux host: carriage returns end up inside
+# directive values, and a continuation followed by one breaks the file.
+.htaccess text eol=lf
+
 # Shell scripts are run by sh, which chokes on a carriage return. They keep
 # LF on every platform, the mirror image of the rule above.
 *.sh   text eol=lf
